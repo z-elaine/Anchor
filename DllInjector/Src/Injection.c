@@ -3,7 +3,7 @@
 BOOL DllInjection(HANDLE hProcess, LPCWSTR pDllName) {
 
 	SIZE_T dwDllName = lstrlenW(pDllName) * sizeof(WCHAR);
-	SIZE_T lpNumberOfBytesWritten = NULL;
+	SIZE_T lpNumberOfBytesWritten = 0;
 
 	PVOID pLoadLibraryW = GetProcAddress(GetModuleHandle(L"kernel32.dll"), "LoadLibraryW");
 	if (pLoadLibraryW == NULL) {
@@ -21,22 +21,25 @@ BOOL DllInjection(HANDLE hProcess, LPCWSTR pDllName) {
 
 	if (!WriteProcessMemory(hProcess, pAddress, pDllName, dwDllName, &lpNumberOfBytesWritten) || lpNumberOfBytesWritten != dwDllName) {
 		printf("\n[!] error writting the dllname into the remote process - %d \n", GetLastError());
+		VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
 		return FALSE;
 	}
 
-	printf("\n[+] %d bytes written", lpNumberOfBytesWritten);
-
+	printf("\n[+] %zu bytes written", lpNumberOfBytesWritten);
 	printf("\n[+] loading the dll into the remote process");
+
 	HANDLE hThread = CreateRemoteThread(hProcess, NULL, NULL, pLoadLibraryW, pAddress, NULL, NULL);
-	if (hThread == INVALID_HANDLE_VALUE) {
+	if (hThread == NULL) {
 		printf("\n[!] Error creating the remote thread - %d \n", GetLastError());
+		VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
 		return FALSE;
 	}
 	printf("\nbien :u\n");
 
 	WaitForSingleObject(hThread, INFINITE);
 
-	VirtualFreeEx(hProcess, dwDllName, 0, MEM_RELEASE);
+	VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+
 	CloseHandle(hThread);
 	CloseHandle(hProcess);
 
